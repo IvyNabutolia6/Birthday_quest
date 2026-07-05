@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Quest: Tumbo Karai</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', Courier, monospace; }
+        
+        body { 
+            background: #020005;
+            color: #fff;
+            overflow: hidden;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+        }
+
+        /* Warp Speed Canvas Background */
+        #starfield {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -2; pointer-events: none;
+        }
+        
+        .nebula { 
+            position: fixed; top: -50%; left: -50%; width: 200%; height: 200%; z-index: -1;
+            background: radial-gradient(circle at 50% 50%, rgba(142, 36, 170, 0.35) 0%, rgba(49, 27, 146, 0.5) 40%, rgba(0,0,0,0) 80%);
+            animation: nebulaSpin 40s linear infinite;
+        }
+        @keyframes nebulaSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* Outer Layout to organize the center panel and side columns */
+        .page-layout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Side text columns hidden outside the interactive box boundaries */
+        .side-column {
+            position: absolute;
+            width: 260px;
+            height: 80vh;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .left-column { left: 2vw; }
+        .right-column { right: 2vw; }
+
+        .container { z-index: 10; width: 90%; max-width: 750px; text-align: center; }
+
+        /* Glassmorphic Scanline Panels */
+        .panel {
+            background: rgba(15, 5, 25, 0.75); 
+            backdrop-filter: blur(12px);
+            border: 2px solid #a855f7; 
+            border-radius: 16px; 
+            box-shadow: 0 0 30px rgba(168, 85, 247, 0.4), inset 0 0 15px rgba(168, 85, 247, 0.2);
+            padding: 2.5rem 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .panel::before {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.06));
+            z-index: 99; background-size: 100% 4px, 6px 100%; pointer-events: none;
+        }
+
+        /* Neon Buttons */
+        .start-btn { 
+            background: transparent; color: #f3e5f5; border: 2px solid #e040fb; padding: 1.2rem 2.5rem; font-size: 1.4rem; font-weight: bold;
+            margin-top: 2rem; border-radius: 8px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+            box-shadow: 0 0 15px rgba(224, 64, 251, 0.4); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .start-btn:hover { 
+            background: #e040fb; color: #000; box-shadow: 0 0 35px #e040fb, 0 0 10px #fff; transform: scale(1.08);
+        }
+
+        /* Game Matrix Grid */
+        #game-canvas { 
+            display: none; position: relative; width: 100%; height: 70vh; 
+            border: 3px dashed #80deea; border-radius: 16px; background: rgba(5, 2, 12, 0.8); overflow: hidden;
+        }
+        #game-canvas.shake { animation: screenShake 0.15s linear infinite; }
+        @keyframes screenShake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-4px, 3px); } 75% { transform: translate(4px, -3px); } }
+
+        #task-bar { position: absolute; top: 12px; left: 15px; color: #80deea; font-weight: bold; z-index: 20; text-shadow: 0 0 5px #00bcd4; font-size: 1.1rem;}
+
+        /* Enhanced Floating Targets */
+        .impostor { 
+            position: absolute; width: 70px; height: 90px; cursor: pointer;
+            animation: complexFloat 15s linear infinite alternate; z-index: 15; user-select: none;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        @keyframes complexFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(120px, 80px) scale(1.1) rotate(10deg); }
+            66% { transform: translate(-60px, 200px) scale(0.9) rotate(-10deg); }
+            100% { transform: translate(200px, 40px) scale(1); }
+        }
+
+        .impostor-name {
+            color: #80deea;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-shadow: 0 0 6px #00bcd4;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .impostor-character {
+            position: relative;
+            width: 42px;
+            height: 52px;
+        }
+        .impostor-character::before {
+            content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px;
+            border: 2px dashed rgba(128, 222, 234, 0.4); border-radius: 50%;
+            animation: spinRing 4s linear infinite; pointer-events: none;
+        }
+        @keyframes spinRing { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .impostor-body { width: 42px; height: 52px; background: #6a1b9a; border: 3px solid #000; border-radius: 16px 16px 6px 6px; position: relative; box-shadow: inset -6px -6px 0px rgba(0,0,0,0.3); }
+        .impostor-visor { position: absolute; top: 12px; left: 14px; width: 28px; height: 16px; background: #80deea; border: 3px solid #000; border-radius: 6px; box-shadow: inset 4px 2px 0px #fff; }
+        .impostor-pack { position: absolute; top: 16px; left: -11px; width: 14px; height: 30px; background: #4a148c; border: 3px solid #000; border-radius: 6px; z-index: -1; }
+        
+        .particle { position: absolute; width: 6px; height: 6px; background: #e040fb; pointer-events: none; border-radius: 2px; z-index: 30; }
+
+        .capture { animation: atomize 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards !important; }
+        @keyframes atomize { 0% { transform: scale(1) rotate(0deg); filter: hue-rotate(0deg); opacity: 1; } 100% { transform: scale(0) rotate(540deg); filter: hue-rotate(180deg); opacity: 0; } }
+
+        #emergency-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999;
+            justify-content: center; align-items: center; flex-direction: column; border: 10px solid #d500f9;
+        }
+        .emergency-banner { background: #d500f9; color: #fff; font-size: 2.5rem; font-weight: bold; padding: 20px 50px; text-transform: uppercase; box-shadow: 0 0 40px #d500f9; animation: flashAlert 0.4s ease infinite alternate; }
+        @keyframes flashAlert { from { opacity: 0.3; transform: scale(0.95); } to { opacity: 1; transform: scale(1.05); } }
+
+        #reveal-screen { display: none; }
+        .victory-badge { color: #80deea; font-size: 2rem; text-transform: uppercase; font-weight: bold; margin-bottom: 1.5rem; letter-spacing: 4px; }
+        
+        h1.birthday { font-size: 3.5rem; color: #fff; margin-bottom: 1rem; line-height: 1.2; }
+        .purple-name { color: #d500f9; text-shadow: 0 0 20px #e040fb, 0 0 40px #6a1b9a; animation: dynamicGlow 2s infinite alternate; }
+        .lightblue-date { color: #80deea; text-shadow: 0 0 20px #00e5ff; font-weight: bold; font-size: 2.2rem; margin: 1.5rem 0; letter-spacing: 2px; }
+        
+        @keyframes dynamicGlow { 0% { text-shadow: 0 0 10px #e040fb, 0 0 20px #6a1b9a; } 100% { text-shadow: 0 0 30px #e040fb, 0 0 50px #b388ff, 0 0 70px #d500f9; } }
+        
+        .message { font-size: 1.25rem; line-height: 1.8; color: #e1bee7; margin-bottom: 2rem; max-width: 630px; display: inline-block; text-align: center; }
+        .sign-off { font-size: 1.05rem; color: #b0bec5; letter-spacing: 2px; margin-top: 1.5rem; font-weight: bold; text-shadow: 0 0 5px rgba(255,255,255,0.3); }
+
+        .pixel-confetti { position: absolute; width: 8px; height: 8px; animation: fallLinear 4s linear infinite; opacity: 0.8; }
+        @keyframes fallLinear { 0% { transform: translateY(-20px) rotate(0deg); } 100% { transform: translateY(105vh) rotate(360deg); } }
+
+        /* Unified Black Text Alert Node with standard pop animation */
+        .side-text-alert {
+            color: #000000 !important;
+            font-weight: 900;
+            font-family: Arial, sans-serif;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 5px rgba(255, 255, 255, 0.8);
+            text-align: center;
+            opacity: 0;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            line-height: 1.45;
+            animation: syncPopFade 3.8s ease-in-out forwards;
+        }
+
+        @keyframes syncPopFade {
+            0% { transform: scale(0.6) translateY(20px); opacity: 0; }
+            12% { transform: scale(1.05) translateY(-2px); opacity: 1; }
+            20% { transform: scale(1) translateY(0); opacity: 1; }
+            85% { transform: scale(1) translateY(0); opacity: 1; }
+            100% { transform: scale(0.8) translateY(-30px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="starfield"></canvas>
+    <div class="nebula"></div>
+
+    <!-- Interstitial Alert Canvas -->
+    <div id="emergency-screen">
+        <div class="emergency-banner">🚨 PARTY DISCOVERY 🚨</div>
+        <p style="margin-top:20px; font-size:1.3rem; color:#80deea; letter-spacing:2px;">DECRYPTING CELEBRATION PROTOCOLS...</p>
+    </div>
+
+    <div class="page-layout">
+        
+        <!-- Left Side Column Container for Popups -->
+        <div class="side-column left-column" id="left-box"></div>
+
+        <div class="container">
+            <!-- Pre-Start Screen -->
+            <div id="setup-screen" class="panel">
+                <h1 style="letter-spacing: 3px; font-size: 2.2rem; color: #80deea;">SYSTEM SECURITY COMPROMISED</h1>
+                <p style="color:#e040fb; margin-top: 15px; font-size: 1.2rem; font-weight: bold;">CRITICAL ALERT: CELEBRATION INTERCEPTED</p>
+                <p style="color:#b0bec5; margin-top: 20px; font-size: 1.05rem; line-height: 1.6;">5 Unknown Purple Anomalies are tampering with the warp coordinates for the July 18th event framework. Engage local grid to lock down defense nodes.</p>
+                <button class="start-btn" onclick="startGame()">Clear Anomalies</button>
+            </div>
+
+            <!-- Interactive Core Canvas -->
+            <div id="game-canvas">
+                <div id="task-bar">TARGET STATUS: [<span id="task-count" style="color:#fff;">0 / 5</span>] PURGED</div>
+            </div>
+
+            <!-- Final Reveal Framework -->
+            <div id="reveal-screen" class="panel">
+                <div class="victory-badge">✓ SYSTEM ONLINE // SECURED</div>
+                
+                <h1 class="birthday">Happy Birthday,<br><span class="purple-name">Tumbo Karai</span>! 🎂🥛😘</h1>
+                
+                <div class="lightblue-date">JULY 18th 🩵</div>
+                
+                <p class="message">
+                    Wishing you an absolutely incredible, stellar day of celebration! The trajectory ahead looks brighter than a supernova. Keep sparkling and conquering your space as you always do ✨. Vile unagonga new chapter ni mambo na kuwa responsible, hiyo ndio maumbile sasa ama niaje Mlalo? Kwani we hudo 😭
+                </p>
+                
+                <div class="sign-off">Saranghae Kuria🩵</div>
+            </div>
+        </div>
+
+        <!-- Right Side Column Container for Popups -->
+        <div class="side-column right-column" id="right-box"></div>
+
+    </div>
+
+    <script>
+        const setupScreen = document.getElementById('setup-screen');
+        const gameCanvas = document.getElementById('game-canvas');
+        const revealScreen = document.getElementById('reveal-screen');
+        const taskCountEl = document.getElementById('task-count');
+        const emergencyScreen = document.getElementById('emergency-screen');
+        
+        const leftBox = document.getElementById('left-box');
+        const rightBox = document.getElementById('right-box');
+
+        const totalImpostors = 5;
+        let clearedImpostors = 0;
+        
+        const impostorNames = ["Nabutolia", "Ivy", "Ndikulukha", "Sugar Kamary", "Biscuits"];
+
+        /* Dynamic Side Alert Logic: Drops the custom prompt phrase entirely, focuses cleanly on hashtag + song title */
+        function triggerSynchronizedTextPops() {
+            setInterval(() => {
+                // Keep side channels clean of legacy elements
+                leftBox.innerHTML = '';
+                rightBox.innerHTML = '';
+
+                // Build a singular node block containing the requested hashtag string structure
+                const alertNode = document.createElement('div');
+                alertNode.className = 'side-text-alert';
+                alertNode.innerHTML = "#Positive Vibration<br>by Bob Marley & The Wailers";
+
+                // Swap layout vectors organically across left/right side boundaries
+                if (Math.random() > 0.5) {
+                    leftBox.appendChild(alertNode);
+                } else {
+                    rightBox.appendChild(alertNode);
+                }
+
+                // Discard DOM reference nodes when lifecycle transitions complete
+                setTimeout(() => {
+                    alertNode.remove();
+                }, 3800);
+
+            }, 4800); // Triggers execution loops every 4.8 seconds
+        }
+
+        /* Starfield Simulation Core Script */
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+        let warpSpeed = 1;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        for(let i=0; i<150; i++) {
+            stars.push({
+                x: Math.random() * canvas.width - canvas.width/2,
+                y: Math.random() * canvas.height - canvas.height/2,
+                z: Math.random() * canvas.width,
+                color: i % 3 === 0 ? '#80deea' : (i % 3 === 1 ? '#e040fb' : '#ffffff')
+            });
+        }
+
+        function drawStars() {
+            ctx.fillStyle = 'rgba(2, 0, 5, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            let cx = canvas.width / 2;
+            let cy = canvas.height / 2;
+
+            for(let i=0; i<stars.length; i++) {
+                let s = stars[i];
+                s.z -= warpSpeed;
+
+                if(s.z <= 0) {
+                    s.z = canvas.width;
+                    s.x = Math.random() * canvas.width - cx;
+                    s.y = Math.random() * canvas.height - cy;
+                }
+
+                let px = (s.x / s.z) * cx + cx;
+                let py = (s.y / s.z) * cy + cy;
+                let size = ((canvas.width - s.z) / canvas.width) * 4;
+
+                if(px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
+                    ctx.fillStyle = s.color;
+                    ctx.fillRect(px, py, size, size);
+                }
+            }
+            requestAnimationFrame(drawStars);
+        }
+        drawStars();
+
+        // Initialize display cycles instantly
+        triggerSynchronizedTextPops();
+
+        /* Interactive Gameplay Execution */
+        function startGame() {
+            setupScreen.style.display = 'none';
+            gameCanvas.style.display = 'block';
+            warpSpeed = 3; 
+            spawnImpostors();
+        }
+
+        function spawnImpostors() {
+            const pad = 100;
+            const canvasWidth = gameCanvas.clientWidth - pad;
+            const canvasHeight = gameCanvas.clientHeight - pad;
+
+            for (let i = 0; i < totalImpostors; i++) {
+                const im = document.createElement('div');
+                im.className = 'impostor';
+                im.onclick = explodeTarget;
+
+                im.innerHTML = `
+                    <div class="impostor-name">${impostorNames[i]}</div>
+                    <div class="impostor-character">
+                        <div class="impostor-body"></div>
+                        <div class="impostor-visor"></div>
+                        <div class="impostor-pack"></div>
+                    </div>
+                `;
+
+                im.style.left = `${pad/2 + Math.random() * canvasWidth}px`;
+                im.style.top = `${pad/2 + Math.random() * canvasHeight}px`;
+                im.style.animationDuration = `${8 + Math.random() * 8}s`;
+                im.style.animationDelay = `-${Math.random() * 15}s`;
+
+                gameCanvas.appendChild(im);
+            }
+        }
+
+        function explodeTarget(e) {
+            const target = e.currentTarget;
+            if (target.classList.contains('capture')) return;
+
+            target.classList.add('capture');
+            clearedImpostors++;
+            taskCountEl.textContent = `${clearedImpostors} / ${totalImpostors}`;
+
+            gameCanvas.classList.add('shake');
+            setTimeout(() => gameCanvas.classList.remove('shake'), 150);
+            createSparks(parseFloat(target.style.left)+35, parseFloat(target.style.top)+45);
+
+            if (clearedImpostors === totalImpostors) {
+                warpSpeed = 25; 
+                setTimeout(triggerEmergencyTransition, 800);
+            }
+        }
+
+        function createSparks(x, y) {
+            for(let i=0; i<12; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = x + 'px';
+                p.style.top = y + 'px';
+                p.style.background = i % 2 === 0 ? '#80deea' : '#d500f9';
+                gameCanvas.appendChild(p);
+
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 3 + Math.random() * 5;
+                let curX = x;
+                let curY = y;
+                
+                let frame = 0;
+                function move() {
+                    curX += Math.cos(angle) * velocity;
+                    curY += Math.sin(angle) * velocity;
+                    p.style.left = curX + 'px';
+                    p.style.top = curY + 'px';
+                    p.style.opacity = (30 - frame) / 30;
+                    frame++;
+                    if(frame < 30) {
+                        requestAnimationFrame(move);
+                    } else {
+                        p.remove();
+                    }
+                }
+                move();
+            }
+        }
+
+        function triggerEmergencyTransition() {
+            gameCanvas.style.display = 'none';
+            emergencyScreen.style.display = 'flex';
+            
+            setTimeout(() => {
+                emergencyScreen.style.display = 'none';
+                revealScreen.style.display = 'block';
+                spawnConfettiShower();
+            }, 2200);
+        }
+
+        function spawnConfettiShower() {
+            const colors = ['#d500f9', '#80deea', '#b388ff', '#ffffff'];
+            for(let i=0; i<60; i++) {
+                setTimeout(() => {
+                    const c = document.createElement('div');
+                    c.className = 'pixel-confetti';
+                    c.style.left = Math.random() * 100 + 'vw';
+                    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    c.style.animationDuration = (2 + Math.random() * 3) + 's';
+                    document.body.appendChild(c);
+                    setTimeout(() => c.remove(), 5000);
+                }, i * 60);
+            }
+        }
+    </script>
+</body>
+</html>
